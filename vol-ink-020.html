@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>mathsheet-core — train capture — vol-ink-020</title>
+<style>
+  /*
+    Standalone real-handwriting capture tool. Deliberately a single static
+    HTML file with zero build step (no npm, no vite, no Tauri) -- open it
+    directly in any browser. This is training infrastructure, not a shipped
+    app feature (same category as everything else under training/, which
+    training/README.md already documents as "nothing here ships with the
+    app"), so it intentionally lives outside src/web rather than inside the
+    production app's codebase.
+
+    The canvas drawing logic below (pointerdown/move/up, lineCap/lineJoin
+    'round', strokeStyle '#1a1a1a', lineWidth 2, 500x140 CSS-pixel canvas)
+    is a manually-kept-in-sync MIRROR of src/web/main.ts's renderInkPad --
+    not imported from it, since this file has no build step to resolve a
+    TypeScript import through. If the app's ink pad's drawing parameters
+    ever change, this should change with them, or captured samples will be
+    rasterized slightly differently than what the production app actually
+    produces.
+
+    Unlike the DevTools-console export used for the first 50 real samples,
+    each captured sample here stores its OWN label alongside its strokes
+    (not inferred from cell position in a separate list) -- explicit
+    beats positional, especially at this larger scale where a single
+    off-by-one in bookkeeping would misalign everything downstream (this
+    is exactly the class of bug that hit the first 50-item batch, in the
+    author's own label-parsing script, not the capture mechanism itself).
+  */
+  :root { color-scheme: light; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  body { margin: 2rem auto; max-width: 40rem; padding: 0 1rem; }
+  h1 { font-size: 1.1rem; margin-bottom: 0.25rem; }
+  .progress { color: #555; margin-bottom: 1.5rem; }
+  .progress .done { color: #2c7a2c; }
+  .progress .skipped { color: #9a6700; }
+  .label-box {
+    font-size: 1.6rem;
+    padding: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: #f7f7f7;
+    margin-bottom: 1rem;
+    min-height: 2.2rem;
+    word-break: break-word;
+  }
+  .label-box.done-message { color: #2c7a2c; font-size: 1.1rem; }
+  canvas {
+    display: block;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+    touch-action: none;
+    cursor: crosshair;
+    margin-bottom: 0.75rem;
+  }
+  .controls { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  button {
+    padding: 0.5rem 0.9rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #f7f7f7;
+    cursor: pointer;
+    font: inherit;
+  }
+  button:hover:not(:disabled) { background: #eee; }
+  button:disabled { color: #bbb; cursor: default; }
+  button.primary { background: #2c6fd9; color: white; border-color: #2c6fd9; }
+  button.primary:hover:not(:disabled) { background: #245bb5; }
+  .footer { border-top: 1px solid #ddd; padding-top: 1rem; margin-top: 1rem; }
+  .hint { color: #888; font-size: 0.85rem; }
+  .save-error {
+    display: none;
+    background: #fdecea;
+    border: 1px solid #d93025;
+    color: #a10e0e;
+    padding: 0.6rem 0.8rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    font-size: 0.85rem;
+  }
+
+  #gate { background: #fffdf2; border: 1px solid #e8dfae; border-radius: 8px;
+          padding: .2rem 1.2rem 1rem; margin: 1rem 0; }
+  #gate ul, #gate ol { padding-left: 1.3rem; }
+  #gate label { display: block; margin: 1rem 0 .6rem; font-weight: 600; }
+  body.gated > *:not(h1):not(#gate):not(script) { display: none; }
+  body:not(.gated) #gate { display: none; }
+  #importBtn, #resetBtn, .footer .hint { display: none; }
+  #submitStatus { margin: .8rem 0 0; font-size: .95rem; }
+  #submitStatus.ok { color: #1a6b2e; } #submitStatus.bad { color: #a10e0e; }
+  #submitStatus code { font-size: 1.05em; user-select: all; }
+</style>
+</head>
+<body class="gated">
+  <h1>Handwriting sample — vol-ink-020 <small style="font-weight:normal;color:#555">(train, 30 items)</small></h1>
+  <div id="gate">
+<h2>What you are agreeing to</h2>
+<ul>
+  <li>You are giving your <b>handwriting</b> &mdash; the pen strokes you draw on
+      this page &mdash; to this project to <b>train handwriting recognition
+      models</b>.</li>
+  <li>The project is currently free and personal, but <b>may become a
+      commercial product</b>. Your permission covers that, with no further
+      approval needed and <b>no payment to you</b>.</li>
+  <li>Your samples are <b>not published or resold</b>. They are used to train
+      and test models, and may be described in aggregate.</li>
+  <li>We store the strokes, the expression each one is a copy of, whether you
+      used a <b>finger, a pen or a mouse</b>, and a random reference code.
+      We do <b>not</b> ask for or store your name, email address or account. The
+      service that receives your submission can technically see your IP address
+      while handling it; we do not keep it with your samples.</li>
+  <li><b>Do not write anything personal.</b> Copy only the printed
+      expressions.</li>
+  <li>Taking part is voluntary. To have your samples deleted, email
+      <b>inkmath-project@proton.me</b> with the reference code shown after you submit.
+      Samples already used in a trained model cannot be taken back out of that
+      model, but they will not be used again.</li>
+</ul>
+<h2>How to do it &mdash; about 10 minutes</h2>
+<ol>
+  <li>Use a <b>finger or stylus on a phone or tablet</b> if you can. A mouse or
+      trackpad works, but is less useful to us.</li>
+  <li>Copy the line shown <b>exactly as printed</b>, symbol for symbol. You do
+      not need to understand the mathematics &mdash; several are deliberately
+      nonsense.</li>
+  <li>Write <b>naturally</b>, at your normal size and speed. Please do not
+      tidy your handwriting. Ordinary handwriting is the whole point.</li>
+  <li>Press <b>Save &amp; Next</b> after each line. Press <b>Submit</b> when you
+      want to finish &mdash; you can stop at any point, and partial progress is
+      welcome.</li>
+</ol>
+<label><input type="checkbox" id="consentBox"> I am 18 or over, and I have read the above and agree to it.</label>
+<button id="startBtn" class="primary" disabled>Start writing</button>
+</div>
+  <div class="save-error" id="saveError"></div>
+  <div class="progress" id="progress"></div>
+  <div class="label-box" id="labelBox"></div>
+  <canvas id="canvas"></canvas>
+  <div class="controls">
+    <button id="clearBtn">Clear</button>
+    <button id="undoBtn">Undo stroke</button>
+    <button id="skipBtn">Skip</button>
+    <button id="backBtn">Back</button>
+    <button id="saveBtn" class="primary">Save &amp; Next</button>
+  </div>
+  <div class="footer">
+    <button id="submitBtn" class="primary">Submit my samples</button>
+    <button id="downloadBtn">Download a copy</button>
+    <div id="submitStatus" role="status" aria-live="polite"></div>
+    <button id="importBtn">Import a downloaded JSON</button>
+    <input id="importInput" type="file" accept=".json,application/json" hidden>
+    <button id="resetBtn">Reset all progress</button>
+    <p class="hint">
+      Autosaves to this browser's local storage after every Save/Skip, so
+      closing the tab or restarting is safe -- reopening this file resumes
+      where you left off. "Download" exports everything captured so far
+      (partial progress is fine to download and resume later).
+      <br><br>
+      <strong>Working across two machines?</strong> Local storage does not
+      travel with the file. Download the JSON on the first machine, copy it
+      across with this HTML file, then use "Import a downloaded JSON" here to
+      carry on where you stopped. Importing MERGES: samples already captured
+      on this machine are kept, and anything already done is skipped rather
+      than asked again.
+    </p>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---- Long run: 2,000 labels, for capturing over many sessions -------
+  // 800 short (<10 chars), 800 medium, 400 long. Short expressions are
+  // the model's weakest bucket (28.8% CER vs 17.0% medium) and the most
+  // common thing in a real worksheet, yet every corpus under-represents
+  // them. This is NEW short data, which is a different thing from
+  // oversampling short samples already collected -- that was tried and
+  // made short performance monotonically WORSE.
+  //
+  // Excludes every label already used or reserved across the eval set and
+  // batches 1-4, so nothing here can overlap or contaminate evaluation.
+  // GENERATED by make_capture_page.py. Purpose: train. Every label
+  // here is disjoint from every other batch, used or reserved.
+  const LABELS = ["j := 6363 slug", "l := 2305 * q * M / 4338 ^ -1", "m ^ 3 + (3664 kV) ^ 3", "q := (648 g*ksi - (M)) ^ 3", "9771 hr", "V := 6248 atm/kN + r ^ 3", "t := P - (8857 kV) / n", "h := 8712 gal/min", "z := log(p) + ((d) - k)", "(9361) / floor(2231) = rad^-1", "w := 292 mm*BTU", "cosh(P) * ((6791 litre) ^ 2)", "1452", "g := cbrt(asin(7677))", "--x = BTU^2/cd", "V := 421.61", "n := g + Q / (V - 594 slug)", "5879", "-(5225 lbf/km) / 7403", "m := -8172 - (2206)", "h := t / (6037 ms) ^ -1", "atan2(f * n, V)", "-max(1405, k) * 6547 kWh", "b := V", "((a) - w) - 9210 Ω*kW = um", "sqrt(8654 atm) = ohm*min", "log2(Q / 352.70 mA) = litre^3", "d := ln(a) * (l)", "((-454.35) ^ 3) ^ 3", "w := -b * a"];
+
+  const KEY = 'mathsheet-capture-vol-ink-020.v1';
+  const CSS_WIDTH = 500;
+  const CSS_HEIGHT = 140;
+
+  /** @type {{index: number, label: string, strokes: {x:number,y:number,t:number}[][]}[]} */
+  let captured = [];
+  /** @type {Set<number>} indices explicitly skipped */
+  let skipped = new Set();
+  let currentIndex = 0;
+  let currentStrokes = [];
+  let drawing = false;
+  let strokeStartMs = 0;
+
+  // ---- Storage -----------------------------------------------------------
+  //
+  // IndexedDB, not localStorage. localStorage is capped near 5MB per origin,
+  // which at ~7.5KB per compact sample is roughly 680 samples -- and this
+  // file offers 2,000. The previous batch stalled at exactly the point its
+  // storage filled, and a warning about it is not the same as fixing it.
+  // IndexedDB's quota is a share of free disk, so it is not a practical
+  // limit here.
+  //
+  // localStorage is kept as a FALLBACK, because a browser can refuse
+  // IndexedDB (private windows, some file:// configurations) and losing an
+  // hour of handwriting to that would be far worse than a size ceiling.
+  const DB_NAME = 'mathsheet-capture';
+  const STORE = 'state';
+  let db = null;
+  let usingFallback = false;
+
+  function openDb() {
+    return new Promise((resolve) => {
+      let request;
+      try {
+        request = indexedDB.open(DB_NAME, 1);
+      } catch {
+        usingFallback = true;
+        resolve(null);
+        return;
+      }
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains(STORE)) {
+          request.result.createObjectStore(STORE);
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => { usingFallback = true; resolve(null); };
+      request.onblocked = () => { usingFallback = true; resolve(null); };
+    });
+  }
+
+  function dbGet() {
+    return new Promise((resolve) => {
+      if (!db) { resolve(null); return; }
+      try {
+        const req = db.transaction(STORE, 'readonly').objectStore(STORE).get(KEY);
+        req.onsuccess = () => resolve(req.result ?? null);
+        req.onerror = () => resolve(null);
+      } catch { resolve(null); }
+    });
+  }
+
+  function dbPut(value) {
+    return new Promise((resolve, reject) => {
+      if (!db) { reject(new Error('no IndexedDB')); return; }
+      try {
+        const tx = db.transaction(STORE, 'readwrite');
+        tx.objectStore(STORE).put(value, KEY);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error || new Error('write failed'));
+        tx.onabort = () => reject(tx.error || new Error('write aborted'));
+      } catch (err) { reject(err); }
+    });
+  }
+
+  function applyState(parsed) {
+    if (!parsed) return;
+    if (Array.isArray(parsed.captured)) captured = parsed.captured;
+    if (Array.isArray(parsed.skipped)) skipped = new Set(parsed.skipped);
+    if (typeof parsed.currentIndex === 'number') currentIndex = parsed.currentIndex;
+  }
+
+  async function load() {
+    db = await openDb();
+    if (db) {
+      const state = await dbGet();
+      if (state) { applyState(state); return; }
+      // Nothing in IndexedDB yet -- an older session may have used
+      // localStorage, so migrate it rather than silently starting over.
+    }
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) applyState(JSON.parse(raw));
+    } catch {
+      // corrupted or absent -- start fresh, same non-fatal fallback the
+      // main app's storage.ts/ink-storage.ts use.
+    }
+  }
+
+  const saveErrorEl = document.getElementById('saveError');
+
+  function showSaveError(err) {
+    saveErrorEl.style.display = '';
+    saveErrorEl.textContent =
+      'Warning: could not save progress to this browser (' + (err && err.message ? err.message : err) + '). ' +
+      'The current item still advanced, but nothing is being autosaved right now -- ' +
+      'download your samples now (below) so you don’t lose them if you close this tab.';
+  }
+
+  function hideSaveError() {
+    saveErrorEl.style.display = 'none';
+  }
+
+  // Writes are fire-and-forget: the UI must never block on storage, and a
+  // failed write must never stop the run advancing. A previous session
+  // stalled silently because a storage error propagated out of the click
+  // handler and render() never ran -- the button simply looked dead.
+  function save() {
+    const state = { captured, skipped: [...skipped], currentIndex };
+    if (db && !usingFallback) {
+      dbPut(state).then(hideSaveError).catch((err) => {
+        // IndexedDB refused mid-session; fall back so work keeps being kept.
+        usingFallback = true;
+        saveToLocalStorage(state, err);
+      });
+      return;
+    }
+    saveToLocalStorage(state, null);
+  }
+
+  function saveToLocalStorage(state, priorError) {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(state));
+      if (priorError) {
+        showSaveError(new Error(
+          'browser database unavailable, using limited fallback storage -- '
+          + 'download your samples regularly'));
+      } else {
+        hideSaveError();
+      }
+    } catch (err) {
+      showSaveError(err);
+    }
+  }
+
+  function doneIndices() {
+    return new Set(captured.map((c) => c.index));
+  }
+
+  function nextPendingIndex(from) {
+    const done = doneIndices();
+    for (let i = from; i < LABELS.length; i++) {
+      if (!done.has(i) && !skipped.has(i)) return i;
+    }
+    return LABELS.length; // ran off the end -- everything handled
+  }
+
+  // ---- Canvas setup (mirrors main.ts's renderInkPad) ---------------------
+  const canvas = document.getElementById('canvas');
+  const ratio = window.devicePixelRatio || 1;
+  canvas.style.width = CSS_WIDTH + 'px';
+  canvas.style.height = CSS_HEIGHT + 'px';
+  canvas.width = CSS_WIDTH * ratio;
+  canvas.height = CSS_HEIGHT * ratio;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(ratio, ratio);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#1a1a1a';
+  ctx.lineWidth = 2;
+
+  function redraw() {
+    ctx.clearRect(0, 0, CSS_WIDTH, CSS_HEIGHT);
+    for (const stroke of currentStrokes) {
+      if (stroke.length < 2) continue;
+      ctx.beginPath();
+      ctx.moveTo(stroke[0][0], stroke[0][1]);
+      for (const p of stroke.slice(1)) ctx.lineTo(p[0], p[1]);
+      ctx.stroke();
+    }
+  }
+
+  // Points are stored as [x, y] arrays rounded to 0.1px, NOT
+  // {x, y, t} objects with full float precision.
+  //
+  // This is a storage decision, not a style one. At full precision a sample
+  // costs ~25KB and a browser's localStorage tops out near 5MB -- about 200
+  // samples, which is exactly where the previous batch hit its ceiling.
+  // Rounding to 0.01px is visually lossless on a ~560px canvas, and the `t`
+  // timestamp was never read by anything in the pipeline. Together that is
+  // 3.4x smaller (28KB -> 8.2KB per sample).
+  //
+  // 0.01 rather than 0.1 deliberately: measured against full precision,
+  // 0.1 shifted 0.51% of the rendered dynamic range and 0.01 shifts 0.34%,
+  // for 9% more storage. Both are far below the variation augmentation
+  // introduces, but this project has been bitten by "small" preprocessing
+  // differences enough times to take the cheap hedge.
+  function pointFrom(e) {
+    const rect = canvas.getBoundingClientRect();
+    return [
+      Math.round((e.clientX - rect.left) * 100) / 100,
+      Math.round((e.clientY - rect.top) * 100) / 100,
+    ];
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    canvas.setPointerCapture(e.pointerId);
+    drawing = true;
+    strokeStartMs = performance.now(); // retained for potential future timing capture
+    currentStrokes.push([pointFrom(e)]);
+    redraw();
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!drawing) return;
+    currentStrokes[currentStrokes.length - 1].push(pointFrom(e));
+    redraw();
+  });
+  function endStroke() { drawing = false; }
+  canvas.addEventListener('pointerup', endStroke);
+  canvas.addEventListener('pointercancel', endStroke);
+
+  // ---- UI wiring ----------------------------------------------------------
+  const progressEl = document.getElementById('progress');
+  const labelBox = document.getElementById('labelBox');
+  const saveBtn = document.getElementById('saveBtn');
+  const skipBtn = document.getElementById('skipBtn');
+  const backBtn = document.getElementById('backBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const undoBtn = document.getElementById('undoBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const resetBtn = document.getElementById('resetBtn');
+
+  function render() {
+    const doneCount = captured.length;
+    const skipCount = skipped.size;
+    progressEl.innerHTML =
+      `${doneCount + skipCount} / ${LABELS.length} handled ` +
+      `(<span class="done">${doneCount} saved</span>, <span class="skipped">${skipCount} skipped</span>)`;
+
+    if (currentIndex >= LABELS.length) {
+      labelBox.textContent = 'All items handled — download your samples below, or Reset to go again.';
+      labelBox.classList.add('done-message');
+      canvas.style.display = 'none';
+      [saveBtn, skipBtn, backBtn, clearBtn, undoBtn].forEach((b) => (b.disabled = true));
+    } else {
+      labelBox.textContent = LABELS[currentIndex];
+      labelBox.classList.remove('done-message');
+      canvas.style.display = '';
+      [saveBtn, skipBtn, clearBtn, undoBtn].forEach((b) => (b.disabled = false));
+      backBtn.disabled = currentIndex === 0;
+    }
+    downloadBtn.disabled = captured.length === 0;
+    currentStrokes = [];
+    redraw();
+  }
+
+  // Wrapping each handler's body in try/catch (not just save() internally)
+  // so ANY unexpected error -- not only a storage failure -- surfaces as a
+  // visible message instead of leaving the button looking unresponsive with
+  // no feedback at all, which is what a silent, unhandled exception here
+  // used to look like.
+  function guarded(fn) {
+    return () => {
+      try {
+        fn();
+      } catch (err) {
+        showSaveError(err);
+      }
+    };
+  }
+
+  saveBtn.addEventListener('click', guarded(() => {
+    if (currentIndex >= LABELS.length) return;
+    if (currentStrokes.some((s) => s.length >= 2)) {
+      captured.push({ index: currentIndex, label: LABELS[currentIndex], strokes: currentStrokes });
+    } else {
+      // nothing meaningful drawn -- treat like a skip rather than saving an empty sample
+      skipped.add(currentIndex);
+    }
+    currentIndex = nextPendingIndex(currentIndex + 1);
+    save();
+    render();
+  }));
+
+  skipBtn.addEventListener('click', guarded(() => {
+    if (currentIndex >= LABELS.length) return;
+    skipped.add(currentIndex);
+    currentIndex = nextPendingIndex(currentIndex + 1);
+    save();
+    render();
+  }));
+
+  backBtn.addEventListener('click', guarded(() => {
+    if (currentIndex === 0) return;
+    // Step back one item and un-mark it as handled, whichever it was, so
+    // it can be redrawn.
+    let prev = currentIndex - 1;
+    captured = captured.filter((c) => c.index !== prev);
+    skipped.delete(prev);
+    currentIndex = prev;
+    save();
+    render();
+  }));
+
+  clearBtn.addEventListener('click', () => {
+    currentStrokes = [];
+    redraw();
+  });
+
+  undoBtn.addEventListener('click', () => {
+    currentStrokes.pop();
+    redraw();
+  });
+
+  downloadBtn.addEventListener('click', () => {
+    const payload = captured
+      .slice()
+      .sort((a, b) => a.index - b.index)
+      .map(({ label, strokes }) => ({ label, strokes }));
+    const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'volunteer_ink_vol-ink-020.json';
+    link.click();
+    URL.revokeObjectURL(url);
+  });
+
+
+  // ---- Volunteer additions (make_volunteer_capture.py) ---------------
+  const SUBMIT_URL = "https://inkmath-collect.inkmath-project.workers.dev/submit";
+  const CONSENT_VERSION = "ink-2026-10-08.1";
+  const CONSENT_SHA256 = "38c9b50f03e155c41ae201e951d5b82d2770b29ddee31aa851d099218d4b83d9";
+  const BATCH = "vol-ink-020";
+  let consentAt = null;
+
+  const gateBox = document.getElementById('consentBox');
+  const startBtn = document.getElementById('startBtn');
+  gateBox.addEventListener('change', () => { startBtn.disabled = !gateBox.checked; });
+  startBtn.addEventListener('click', () => {
+    if (!gateBox.checked) return;
+    consentAt = new Date().toISOString();
+    document.body.classList.remove('gated');
+  });
+
+  // pointerType per stroke. A SECOND listener, registered after the template's
+  // own, so the stroke array it keys on already exists and the template's
+  // capture code stays byte-for-byte untouched. Held in a WeakMap keyed by the
+  // stroke array itself, which is the same object that ends up in `captured`.
+  // Strokes restored from storage after a reload have no entry: 'unknown'.
+  const strokeType = new WeakMap();
+  canvas.addEventListener('pointerdown', (e) => {
+    const stroke = currentStrokes[currentStrokes.length - 1];
+    if (stroke) strokeType.set(stroke, e.pointerType || 'unknown');
+  });
+  function typesOf(sample) {
+    const seen = new Set();
+    for (const s of sample.strokes) seen.add(strokeType.get(s) || 'unknown');
+    return Array.from(seen);
+  }
+
+  function newReference() {
+    const bytes = new Uint8Array(8);
+    (window.crypto || window.msCrypto).getRandomValues(bytes);
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  // One id per page load, kept across retries so a re-sent submission dedupes
+  // on the server instead of arriving twice.
+  let submissionId = null;
+  const submitted = new Set();       // labels already sent and acknowledged
+
+  const submitBtn = document.getElementById('submitBtn');
+  const submitStatus = document.getElementById('submitStatus');
+  function say(text, cls, node) {
+    submitStatus.className = cls || '';
+    submitStatus.textContent = text;
+    if (node) submitStatus.appendChild(node);
+  }
+
+  if (!SUBMIT_URL) submitBtn.style.display = 'none';
+
+  submitBtn.addEventListener('click', async () => {
+    const fresh = captured
+      .filter((c) => !submitted.has(c.label) && c.strokes.some((s) => s.length >= 2))
+      .sort((a, b) => a.index - b.index);
+    if (fresh.length === 0) { say('Nothing new to send yet — write and save a line first.', 'bad'); return; }
+    if (!consentAt) { say('Please tick the agreement first.', 'bad'); return; }
+    if (!submissionId) submissionId = newReference();
+
+    const counts = {};
+    const samples = fresh.map((c) => {
+      const types = typesOf(c);
+      for (const t of types) counts[t] = (counts[t] || 0) + 1;
+      return { label: c.label, strokes: c.strokes, pointer_types: types };
+    });
+    const payload = {
+      schema: 'volunteer-ink.v1',
+      batch: BATCH,
+      submission_id: submissionId,
+      consent: { version: CONSENT_VERSION, sha256: CONSENT_SHA256, accepted_at: consentAt },
+      client: { touch_points: navigator.maxTouchPoints || 0, pointer_type_counts: counts },
+      samples,
+    };
+
+    submitBtn.disabled = true;
+    say('Sending…');
+    try {
+      // text/plain keeps this a "simple" CORS request: no preflight to configure.
+      const res = await fetch(SUBMIT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('the server answered ' + res.status);
+      for (const c of fresh) submitted.add(c.label);
+      const ref = document.createElement('code');
+      ref.textContent = submissionId;
+      say('Thank you — sent ' + fresh.length + ' line(s). Your reference code is ', 'ok', ref);
+      // Anything written after this is a new submission with its own code.
+      submissionId = null;
+    } catch (err) {
+      say('Could not send (' + (err && err.message ? err.message : err) +
+          '). Nothing is lost — try again, or use Download and send the file as instructed.', 'bad');
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
+  const importBtn = document.getElementById('importBtn');
+  const importInput = document.getElementById('importInput');
+
+  importBtn.addEventListener('click', () => importInput.click());
+
+  importInput.addEventListener('change', guarded(() => {
+    const file = importInput.files && importInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = guarded(() => {
+      // Match samples by LABEL, not by index. Index would be wrong the
+      // moment two machines skip different items -- and silently pairing a
+      // drawing with the wrong label is exactly the bug that wrecked the
+      // very first 50-sample batch in this project.
+      const incoming = JSON.parse(String(reader.result));
+      if (!Array.isArray(incoming)) throw new Error('not a capture file (expected a JSON array)');
+
+      const known = new Set(captured.map((c) => c.label));
+      let added = 0;
+      let unknown = 0;
+      for (const sample of incoming) {
+        if (!sample || typeof sample.label !== 'string' || !Array.isArray(sample.strokes)) continue;
+        if (known.has(sample.label)) continue;      // already have it here
+        const index = LABELS.indexOf(sample.label);
+        if (index === -1) { unknown++; continue; }  // from a different batch
+        captured.push({ index, label: sample.label, strokes: sample.strokes });
+        known.add(sample.label);
+        added++;
+      }
+
+      currentIndex = nextPendingIndex(0);
+      save();
+      render();
+
+      const note = unknown > 0
+        ? ` (${unknown} skipped -- they belong to a different batch)`
+        : '';
+      saveErrorEl.style.display = '';
+      saveErrorEl.style.background = '#eaf6ea';
+      saveErrorEl.style.borderColor = '#2c7a2c';
+      saveErrorEl.style.color = '#1e5c1e';
+      saveErrorEl.textContent = `Imported ${added} sample(s)${note}. Now at ${captured.length} total.`;
+      importInput.value = '';
+    });
+    reader.readAsText(file);
+  }));
+
+  resetBtn.addEventListener('click', () => {
+    if (!confirm('Discard all captured progress and start over?')) return;
+    captured = [];
+    skipped = new Set();
+    currentIndex = 0;
+    save();
+    render();
+  });
+
+  load().then(() => {
+    currentIndex = nextPendingIndex(currentIndex);
+    render();
+  }).catch(() => {
+    // Never leave the page blank because storage misbehaved.
+    render();
+  });
+})();
+</script>
+</body>
+</html>
