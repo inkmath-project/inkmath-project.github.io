@@ -1,32 +1,70 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Handwriting samples</title></head><body>
-<p>Taking you to a handwriting page&hellip; if nothing happens, pick one:</p>
+<title>Help a handwriting app read maths</title>
+<style>:root { color-scheme: light dark; --bg:#fff; --fg:#161a1f; --mut:#586069; --card:#f6f7f9;
+        --line:#d9dde3; --acc:#2c6fd9; --accfg:#fff; --note:#fffdf2; --noteline:#e8dfae }
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#14171b; --fg:#e8ebef; --mut:#9aa4af; --card:#1d2227; --line:#333a42;
+          --acc:#6aa3ff; --accfg:#0b1220; --note:#25231a; --noteline:#5b5326 } }
+body { font: 16px/1.55 system-ui, sans-serif; background: var(--bg); color: var(--fg);
+       max-width: 42em; margin: 0 auto; padding: 1.5em 16px 3em }
+h1 { font-size: 1.6em; margin: .2em 0 .3em }
+h2 { font-size: 1.1em; margin: 1.8em 0 .5em }
+.lede { color: var(--mut); margin-top: 0 }
+.choices { display: grid; gap: 14px; margin: 1.4em 0 }
+@media (min-width: 36em) { .choices { grid-template-columns: 1fr 1fr } }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+        padding: 1em 1.1em 1.1em; display: flex; flex-direction: column }
+.card h2 { margin: 0 0 .3em; font-size: 1.15em }
+.card p { margin: .2em 0 .9em; flex: 1 }
+.card .tag { color: var(--mut); font-size: .9em }
+a.go { display: inline-block; text-align: center; background: var(--acc); color: var(--accfg);
+       font-weight: 600; text-decoration: none; padding: .6em 1em; border-radius: 8px }
+a.go:focus-visible { outline: 3px solid var(--fg); outline-offset: 2px }
+.note { background: var(--note); border: 1px solid var(--noteline); border-radius: 8px;
+        padding: .2em 1em; margin-top: 1.6em }
+ul { padding-left: 1.2em }
+</style></head><body>
+<h1>Help a handwriting app read maths</h1>
+<p class="lede">I'm an independent developer building a free app that reads
+handwritten maths. It struggles with handwriting that isn't mine, because
+everything it has learned from is a few people's writing. I'm collecting
+ordinary handwriting from lots of different people. It takes about ten minutes.
+No account, no name, no email.</p>
+
+<div class="choices">
+  <div class="card">
+    <h2>Write on a screen</h2>
+    <p>Use a <b>finger or stylus</b> on a phone or tablet to copy about 30 short
+       maths lines. The quickest way if you have a stylus.</p>
+    <p class="tag">Phone or tablet &middot; about 10 minutes</p>
+    <a class="go" href="ink.html">Start writing on screen</a>
+  </div>
+  <div class="card">
+    <h2>Write on paper</h2>
+    <p>Copy 15 short maths lines onto <b>blank paper</b> with a pen or pencil,
+       photograph the page, and upload the photo.</p>
+    <p class="tag">Any phone camera &middot; about 10 minutes</p>
+    <a class="go" href="paper.html">Get a sheet to copy</a>
+  </div>
+</div>
+
+<p>Either is welcome and useful. Please write <b>naturally, not neatly</b>:
+ordinary handwriting is the whole point.</p>
+
+<h2>What happens to it</h2>
 <ul>
-<li><a href="vol-ink-001.html">vol-ink-001.html</a></li>
-<li><a href="vol-ink-002.html">vol-ink-002.html</a></li>
-<li><a href="vol-ink-003.html">vol-ink-003.html</a></li>
-<li><a href="vol-ink-004.html">vol-ink-004.html</a></li>
-<li><a href="vol-ink-005.html">vol-ink-005.html</a></li>
-<li><a href="vol-ink-006.html">vol-ink-006.html</a></li>
-<li><a href="vol-ink-007.html">vol-ink-007.html</a></li>
-<li><a href="vol-ink-008.html">vol-ink-008.html</a></li>
-<li><a href="vol-ink-009.html">vol-ink-009.html</a></li>
-<li><a href="vol-ink-010.html">vol-ink-010.html</a></li>
-<li><a href="vol-ink-011.html">vol-ink-011.html</a></li>
-<li><a href="vol-ink-012.html">vol-ink-012.html</a></li>
-<li><a href="vol-ink-013.html">vol-ink-013.html</a></li>
-<li><a href="vol-ink-014.html">vol-ink-014.html</a></li>
-<li><a href="vol-ink-015.html">vol-ink-015.html</a></li>
-<li><a href="vol-ink-016.html">vol-ink-016.html</a></li>
-<li><a href="vol-ink-017.html">vol-ink-017.html</a></li>
-<li><a href="vol-ink-018.html">vol-ink-018.html</a></li>
-<li><a href="vol-ink-019.html">vol-ink-019.html</a></li>
-<li><a href="vol-ink-020.html">vol-ink-020.html</a></li>
+  <li>Your handwriting is used to <b>train and test handwriting-recognition
+      models</b>.</li>
+  <li>The project is free and personal now but <b>may become a commercial
+      product</b>. There is no payment.</li>
+  <li>Your samples are not published or resold, and I don't collect your name or
+      email.</li>
+  <li>You must be 18 or over. You can ask for your samples to be deleted by
+      emailing <b>inkmath-project@proton.me</b>.</li>
 </ul>
-<script>
-  const pages = ["vol-ink-001.html", "vol-ink-002.html", "vol-ink-003.html", "vol-ink-004.html", "vol-ink-005.html", "vol-ink-006.html", "vol-ink-007.html", "vol-ink-008.html", "vol-ink-009.html", "vol-ink-010.html", "vol-ink-011.html", "vol-ink-012.html", "vol-ink-013.html", "vol-ink-014.html", "vol-ink-015.html", "vol-ink-016.html", "vol-ink-017.html", "vol-ink-018.html", "vol-ink-019.html", "vol-ink-020.html"];
-  location.replace(pages[Math.floor(Math.random() * pages.length)]);
-</script>
+<div class="note"><p>You will see and agree to the <b>full agreement</b> before you
+start, on whichever route you pick. That agreement, not this summary, is what
+applies.</p></div>
 </body></html>
