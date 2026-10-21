@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Help a handwriting app read maths</title>
+<title>Help an engineering calculator read handwriting</title>
 <style>:root { color-scheme: light dark; --bg:#fff; --fg:#161a1f; --mut:#586069; --card:#f6f7f9;
         --line:#d9dde3; --acc:#2c6fd9; --accfg:#fff; --note:#fffdf2; --noteline:#e8dfae }
 @media (prefers-color-scheme: dark) {
@@ -12,6 +12,8 @@ body { font: 16px/1.55 system-ui, sans-serif; background: var(--bg); color: var(
 h1 { font-size: 1.6em; margin: .2em 0 .3em }
 h2 { font-size: 1.1em; margin: 1.8em 0 .5em }
 .lede { color: var(--mut); margin-top: 0 }
+code { background: var(--card); border: 1px solid var(--line); border-radius: 4px;
+       padding: 0 .3em; font-size: .92em; white-space: nowrap }
 .choices { display: grid; gap: 14px; margin: 1.4em 0 }
 @media (min-width: 36em) { .choices { grid-template-columns: 1fr 1fr } }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
@@ -26,12 +28,16 @@ a.go:focus-visible { outline: 3px solid var(--fg); outline-offset: 2px }
         padding: .2em 1em; margin-top: 1.6em }
 ul { padding-left: 1.2em }
 </style></head><body>
-<h1>Help a handwriting app read maths</h1>
-<p class="lede">I'm an independent developer building a free app that reads
-handwritten maths. It struggles with handwriting that isn't mine, because
-everything it has learned from is a few people's writing. I'm collecting
-ordinary handwriting from lots of different people. It takes about ten minutes.
-No account, no name, no email.</p>
+<h1>Help an engineering calculator read handwriting</h1>
+<p class="lede">I'm an independent developer building a free engineering
+calculator: you write an expression by hand, units included (like
+<code>2 kN/m</code> or <code>20 °C</code>), and it works out the answer. It
+struggles with handwriting that isn't mine, because everything it has learned
+from is a few people's writing. I'm collecting ordinary handwriting from lots of
+different people. It takes about ten minutes. No account, no name, no email.</p>
+<p class="lede">The lines you copy look like <code>L := 6 m</code> or
+<code>M/S = MPa</code>. Some are deliberately nonsense, so you don't need to
+understand them: just copy the shapes.</p>
 
 <div class="choices">
   <div class="card">
